@@ -1,0 +1,100 @@
+(function () {
+  'use strict';
+  if (typeof document === 'undefined') return;
+  var T = window.BoxTools;
+
+  function el(tag, cls, text) {
+    var e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text != null) e.textContent = text;
+    return e;
+  }
+  function copy(text, btn) {
+    function done() { var o = btn.textContent; btn.textContent = 'Copied'; setTimeout(function () { btn.textContent = o; }, 1200); }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done, fallback);
+    } else fallback();
+    function fallback() {
+      var t = document.createElement('textarea');
+      t.value = text; t.setAttribute('readonly', ''); t.style.position = 'absolute'; t.style.left = '-9999px';
+      document.body.appendChild(t); t.select();
+      try { document.execCommand('copy'); done(); } catch (e) { btn.textContent = 'Press Ctrl+C'; }
+      document.body.removeChild(t);
+    }
+  }
+
+  function initTool(form) {
+    var tool = T.bySlug(form.getAttribute('data-slug'));
+    if (!tool) return;
+    var out = document.getElementById('out');
+    var inputs = {};
+    tool.fields.forEach(function (f) { inputs[f.id] = document.getElementById(f.id); });
+
+    function values() {
+      var v = {};
+      tool.fields.forEach(function (f) {
+        var i = inputs[f.id];
+        v[f.id] = f.type === 'checkbox' ? i.checked : i.value;
+      });
+      return v;
+    }
+    function setLabels() {
+      if (!tool.labels) return;
+      var l = tool.labels[inputs.mode.value];
+      document.querySelector('label[for=a]').textContent = l[0];
+      document.querySelector('label[for=b]').textContent = l[1];
+    }
+    function run() {
+      var r = tool.compute(values());
+      out.textContent = '';
+      if (r.empty) { out.appendChild(el('p', 'msg', r.empty)); return; }
+      if (r.error) { out.appendChild(el('p', 'msg err', r.error)); return; }
+      if (r.rows) {
+        r.rows.forEach(function (row) {
+          var d = el('div', 'res-row' + (row[2] ? ' main' : ''));
+          d.appendChild(el('span', null, row[0]));
+          d.appendChild(el('strong', null, row[1]));
+          out.appendChild(d);
+        });
+      } else if (r.text != null) {
+        var ta = el('textarea'); ta.readOnly = true; ta.value = r.text; ta.rows = 6;
+        ta.setAttribute('aria-label', 'Converted text');
+        out.appendChild(ta);
+        var a = el('div', 'actions'), b = el('button', null, 'Copy');
+        b.type = 'button'; b.onclick = function () { copy(r.text, b); };
+        a.appendChild(b); out.appendChild(a);
+      } else if (r.password != null) {
+        out.appendChild(el('div', 'pw', r.password));
+        out.appendChild(el('p', 'msg', r.note));
+        var a2 = el('div', 'actions');
+        var c = el('button', null, 'Copy'); c.type = 'button'; c.onclick = function () { copy(r.password, c); };
+        var g = el('button', 'ghost', 'Generate new'); g.type = 'button'; g.onclick = run;
+        a2.appendChild(c); a2.appendChild(g); out.appendChild(a2);
+      }
+    }
+    form.addEventListener('input', run);
+    form.addEventListener('change', function () { setLabels(); run(); });
+    form.addEventListener('submit', function (e) { e.preventDefault(); run(); });
+    setLabels(); run();
+  }
+
+  function initSearch(q) {
+    var cards = document.querySelectorAll('[data-search]');
+    var empty = document.getElementById('none');
+    function f() {
+      var s = q.value.trim().toLowerCase(), shown = 0;
+      Array.prototype.forEach.call(cards, function (c) {
+        var ok = !s || c.getAttribute('data-search').indexOf(s) !== -1;
+        c.style.display = ok ? '' : 'none';
+        if (ok) shown++;
+      });
+      empty.style.display = shown ? 'none' : 'block';
+    }
+    q.addEventListener('input', f);
+  }
+
+  var form = document.getElementById('tool-form');
+  if (form) initTool(form);
+  var q = document.getElementById('q');
+  if (q) initSearch(q);
+})();

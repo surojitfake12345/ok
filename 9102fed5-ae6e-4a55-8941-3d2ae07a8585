@@ -1,0 +1,161 @@
+(function (root, factory) {
+  var calc = (typeof require === 'function') ? require('./calc.js') : root.BoxCalc;
+  var api = factory(calc);
+  if (typeof module === 'object' && module.exports) module.exports = api;
+  else root.BoxTools = api;
+})(typeof self !== 'undefined' ? self : this, function (C) {
+  'use strict';
+
+  var nf = new Intl.NumberFormat('en-IN', { maximumFractionDigits: 2, minimumFractionDigits: 2 });
+  var ni = new Intl.NumberFormat('en-IN', { maximumFractionDigits: 0 });
+  function money(n) { return nf.format(n); }
+  function int(n) { return ni.format(n); }
+  function num(s) { return s === '' || s == null ? NaN : parseFloat(s); }
+  function fmtTime(sec) {
+    if (sec < 60) return sec + ' sec';
+    var m = Math.floor(sec / 60), s = sec % 60;
+    return m + ' min' + (s ? ' ' + s + ' sec' : '');
+  }
+  function plural(n, w) { return n + ' ' + w + (n === 1 ? '' : 's'); }
+
+  var TOOLS = [
+    {
+      slug: 'age-calculator', name: 'Age calculator', cat: 'CalcBox',
+      desc: 'Find your exact age in years, months and days, plus your next birthday.',
+      fields: [
+        { id: 'dob', label: 'Date of birth', type: 'date' },
+        { id: 'ref', label: 'Age on this date (optional)', type: 'date', hint: 'Leave empty to use today.' }
+      ],
+      compute: function (v) {
+        if (!v.dob) return { empty: 'Pick a date of birth to see the result.' };
+        var r = C.age(v.dob, v.ref || C.todayISO());
+        if (r.error) return { error: r.error };
+        return { rows: [
+          ['Age', plural(r.years, 'year') + ', ' + plural(r.months, 'month') + ', ' + plural(r.days, 'day'), 1],
+          ['Total months', int(r.totalMonths)],
+          ['Total days', int(r.totalDays)],
+          ['Born on a', r.bornWeekday],
+          ['Next birthday in', r.daysToBirthday === 0 ? 'Today' : plural(r.daysToBirthday, 'day')]
+        ] };
+      }
+    },
+    {
+      slug: 'percentage-calculator', name: 'Percentage calculator', cat: 'CalcBox',
+      desc: 'Percent of a number, what percent one number is of another, and percent change.',
+      fields: [
+        { id: 'mode', label: 'What do you want to find?', type: 'select', value: 'of', options: [
+          ['of', 'X% of Y'], ['what', 'X is what % of Y'], ['change', '% change from X to Y']] },
+        { id: 'a', label: 'Percentage (X)', type: 'number', step: 'any' },
+        { id: 'b', label: 'Number (Y)', type: 'number', step: 'any' }
+      ],
+      labels: { of: ['Percentage (X)', 'Number (Y)'], what: ['Number (X)', 'Total (Y)'], change: ['Old value (X)', 'New value (Y)'] },
+      compute: function (v) {
+        var a = num(v.a), b = num(v.b);
+        if (isNaN(a) || isNaN(b)) return { empty: 'Enter both numbers to see the result.' };
+        var r = C.percentage(v.mode, a, b);
+        if (r.error) return { error: r.error };
+        var val = Math.round(r.value * 1e6) / 1e6;
+        var txt = v.mode === 'of' ? String(val) : val + '%';
+        if (v.mode === 'change') txt = (val > 0 ? '+' : '') + txt;
+        return { rows: [['Result', txt, 1]] };
+      }
+    },
+    {
+      slug: 'emi-calculator', name: 'EMI calculator', cat: 'CalcBox',
+      desc: 'Monthly loan EMI, total interest and total payment for any loan.',
+      fields: [
+        { id: 'amount', label: 'Loan amount', type: 'number', step: 'any', min: '0' },
+        { id: 'rate', label: 'Interest rate (% per year)', type: 'number', step: 'any', min: '0' },
+        { id: 'tenure', label: 'Tenure', type: 'number', step: '1', min: '1' },
+        { id: 'unit', label: 'Tenure in', type: 'select', value: 'years', options: [['years', 'Years'], ['months', 'Months']] }
+      ],
+      compute: function (v) {
+        var p = num(v.amount), r = num(v.rate), t = num(v.tenure);
+        if (isNaN(p) || isNaN(r) || isNaN(t)) return { empty: 'Fill in all fields to see the result.' };
+        var months = v.unit === 'years' ? t * 12 : t;
+        var res = C.emi(p, r, months);
+        if (res.error) return { error: res.error };
+        return { rows: [
+          ['Monthly EMI', money(res.emi), 1],
+          ['Total interest', money(res.interest)],
+          ['Total payment', money(res.total)],
+          ['Interest share of payment', (res.interest / res.total * 100).toFixed(1) + '%']
+        ] };
+      }
+    },
+    {
+      slug: 'discount-calculator', name: 'Discount calculator', cat: 'CalcBox',
+      desc: 'Final price after a discount, with an optional tax such as GST.',
+      fields: [
+        { id: 'price', label: 'Original price', type: 'number', step: 'any', min: '0' },
+        { id: 'pct', label: 'Discount (%)', type: 'number', step: 'any', min: '0', max: '100' },
+        { id: 'tax', label: 'Tax (%) (optional)', type: 'number', step: 'any', min: '0', hint: 'Applied after the discount.' }
+      ],
+      compute: function (v) {
+        var p = num(v.price), d = num(v.pct), t = v.tax === '' ? 0 : num(v.tax);
+        if (isNaN(p) || isNaN(d)) return { empty: 'Enter a price and a discount to see the result.' };
+        var r = C.discount(p, d, t);
+        if (r.error) return { error: r.error };
+        var rows = [['You pay', money(r.pay), 1], ['You save', money(r.saved)], ['Price after discount', money(r.after)]];
+        if (t) rows.push(['Tax', money(r.tax)]);
+        return { rows: rows };
+      }
+    },
+    {
+      slug: 'word-counter', name: 'Word and character counter', cat: 'TextBox',
+      desc: 'Count words, characters, sentences and paragraphs, with reading time.',
+      fields: [{ id: 'text', label: 'Your text', type: 'textarea', rows: 8 }],
+      compute: function (v) {
+        var s = C.textStats(v.text);
+        return { rows: [
+          ['Words', int(s.words), 1], ['Characters', int(s.chars)],
+          ['Characters (no spaces)', int(s.charsNoSpaces)], ['Sentences', int(s.sentences)],
+          ['Paragraphs', int(s.paragraphs)], ['Reading time', fmtTime(s.readingSeconds)]
+        ] };
+      }
+    },
+    {
+      slug: 'case-converter', name: 'Case converter', cat: 'TextBox',
+      desc: 'Change text to UPPER, lower, Title, Sentence, camelCase, snake_case or kebab-case.',
+      fields: [
+        { id: 'mode', label: 'Convert to', type: 'select', value: 'title', options: [
+          ['upper', 'UPPER CASE'], ['lower', 'lower case'], ['title', 'Title Case'], ['sentence', 'Sentence case'],
+          ['camel', 'camelCase'], ['snake', 'snake_case'], ['kebab', 'kebab-case']] },
+        { id: 'text', label: 'Your text', type: 'textarea', rows: 6 }
+      ],
+      output: 'text',
+      compute: function (v) {
+        if (!v.text) return { empty: 'Type or paste text to convert.' };
+        return { text: C.convertCase(v.text, v.mode) };
+      }
+    },
+    {
+      slug: 'password-generator', name: 'Password generator', cat: 'SmartBox',
+      desc: 'Create strong random passwords using your browser’s secure random generator.',
+      fields: [
+        { id: 'length', label: 'Length (8 to 64)', type: 'number', step: '1', min: '8', max: '64', value: '16' },
+        { id: 'lower', label: 'Lowercase letters', type: 'checkbox', value: true },
+        { id: 'upper', label: 'Uppercase letters', type: 'checkbox', value: true },
+        { id: 'digits', label: 'Numbers', type: 'checkbox', value: true },
+        { id: 'symbols', label: 'Symbols', type: 'checkbox', value: true }
+      ],
+      output: 'password',
+      compute: function (v) {
+        var r = C.password({ length: num(v.length), lower: v.lower, upper: v.upper, digits: v.digits, symbols: v.symbols });
+        if (r.error) return { error: r.error };
+        return { password: r.value, note: 'About ' + r.bits + ' bits of entropy. Generated on your device.' };
+      }
+    }
+  ];
+
+  var SOON = [
+    { name: 'ImageBox', desc: 'Compress and resize images.' },
+    { name: 'FileBox', desc: 'Merge and split PDFs.' },
+    { name: 'SmartBox: QR code', desc: 'Generate QR codes.' }
+  ];
+
+  return {
+    TOOLS: TOOLS, SOON: SOON,
+    bySlug: function (s) { for (var i = 0; i < TOOLS.length; i++) if (TOOLS[i].slug === s) return TOOLS[i]; return null; }
+  };
+});

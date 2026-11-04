@@ -1,0 +1,96 @@
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const C = require('../src/js/calc.js');
+const near = (a, b, eps = 0.01) => assert.ok(Math.abs(a - b) <= eps, a + ' vs ' + b);
+
+test('age: standard case', () => {
+  const r = C.age('2000-01-15', '2024-03-10');
+  assert.deepEqual([r.years, r.months, r.days], [24, 1, 24]);
+  const days = Math.round((Date.UTC(2024, 2, 10) - Date.UTC(2000, 0, 15)) / 86400000);
+  assert.equal(r.totalDays, days);
+  assert.equal(r.bornWeekday, 'Saturday');
+});
+test('age: leap-day birth and borrow across year', () => {
+  const r = C.age('2000-02-29', '2001-02-28');
+  assert.deepEqual([r.years, r.months, r.days], [0, 11, 30]);
+});
+test('age: birthday today and next birthday', () => {
+  const r = C.age('2000-05-10', '2024-05-10');
+  assert.deepEqual([r.years, r.months, r.days, r.daysToBirthday], [24, 0, 0, 0]);
+  assert.equal(C.age('2000-05-11', '2024-05-10').daysToBirthday, 1);
+});
+test('age: invalid input', () => {
+  assert.ok(C.age('2030-01-01', '2024-01-01').error);
+  assert.ok(C.age('2023-02-30', '2024-01-01').error);
+  assert.ok(C.age('', '2024-01-01').error);
+});
+
+test('percentage modes', () => {
+  assert.equal(C.percentage('of', 20, 150).value, 30);
+  assert.equal(C.percentage('what', 30, 150).value, 20);
+  assert.equal(C.percentage('change', 50, 75).value, 50);
+  assert.equal(C.percentage('change', 80, 60).value, -25);
+  assert.ok(C.percentage('what', 5, 0).error);
+  assert.ok(C.percentage('change', 0, 5).error);
+  assert.ok(C.percentage('of', NaN, 5).error);
+});
+
+test('emi: known value and zero rate', () => {
+  const r = C.emi(100000, 10, 12);
+  near(r.emi, 8791.59);
+  near(r.total, 105499.06, 0.2);
+  near(r.interest, 5499.06, 0.2);
+  assert.equal(C.emi(12000, 0, 12).emi, 1000);
+  near(C.emi(2500000, 8.5, 240).emi, 21696.0, 1);
+});
+test('emi: validation', () => {
+  assert.ok(C.emi(0, 10, 12).error);
+  assert.ok(C.emi(1000, -1, 12).error);
+  assert.ok(C.emi(1000, 10, 0).error);
+  assert.ok(C.emi(1000, 10, 1.5).error);
+});
+
+test('discount', () => {
+  const r = C.discount(1000, 20, 0);
+  assert.deepEqual([r.saved, r.after, r.pay], [200, 800, 800]);
+  near(C.discount(1000, 20, 18).pay, 944);
+  assert.ok(C.discount(100, 101, 0).error);
+  assert.ok(C.discount(-1, 10, 0).error);
+});
+
+test('textStats', () => {
+  const r = C.textStats('Hello world. How are you?');
+  assert.equal(r.words, 5);
+  assert.equal(r.chars, 25);
+  assert.equal(r.charsNoSpaces, 21);
+  assert.equal(r.sentences, 2);
+  assert.equal(C.textStats('').words, 0);
+  assert.equal(C.textStats('').sentences, 0);
+  assert.equal(C.textStats('a\u{1F600}').chars, 2);
+  assert.equal(C.textStats('one\n\ntwo\n\n\nthree').paragraphs, 3);
+  assert.equal(C.textStats(new Array(201).join('w ')).readingSeconds, 60);
+});
+
+test('convertCase', () => {
+  assert.equal(C.convertCase('hello WORLD foo', 'title'), 'Hello World Foo');
+  assert.equal(C.convertCase('Hello World foo', 'snake'), 'hello_world_foo');
+  assert.equal(C.convertCase('Hello World foo', 'camel'), 'helloWorldFoo');
+  assert.equal(C.convertCase('Hello World foo', 'kebab'), 'hello-world-foo');
+  assert.equal(C.convertCase('hello WORLD. this is IT', 'sentence'), 'Hello world. This is it');
+  assert.equal(C.convertCase('abc', 'upper'), 'ABC');
+  assert.equal(C.convertCase('ABC', 'lower'), 'abc');
+});
+
+test('password', () => {
+  const o = { length: 16, lower: true, upper: true, digits: true, symbols: true };
+  for (let i = 0; i < 200; i++) {
+    const p = C.password(o).value;
+    assert.equal(p.length, 16);
+    assert.match(p, /[a-z]/); assert.match(p, /[A-Z]/); assert.match(p, /[0-9]/); assert.match(p, /[^a-zA-Z0-9]/);
+  }
+  assert.notEqual(C.password(o).value, C.password(o).value);
+  assert.match(C.password({ length: 20, digits: true }).value, /^[0-9]{20}$/);
+  assert.ok(C.password({ length: 4, lower: true }).error);
+  assert.ok(C.password({ length: 16 }).error);
+  assert.ok(C.password({ length: 65, lower: true }).error);
+});

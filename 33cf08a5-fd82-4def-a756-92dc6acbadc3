@@ -1,0 +1,107 @@
+import sys, pathlib
+from playwright.sync_api import sync_playwright
+
+DIST = pathlib.Path(__file__).resolve().parent.parent / "dist"
+fails, passes = [], 0
+
+def check(name, cond, detail=""):
+    global passes
+    if cond: passes += 1
+    else: fails.append(f"{name} {detail}")
+
+def txt(page): return page.inner_text("#out")
+
+with sync_playwright() as p:
+    b = p.chromium.launch(executable_path="/usr/bin/google-chrome", args=["--no-sandbox"])
+    ctx = b.new_context(viewport={"width": 375, "height": 800}, is_mobile=True, has_touch=True)
+    page = ctx.new_page()
+    errors = []
+    page.on("console", lambda m: errors.append(m.text) if m.type == "error" else None)
+    page.on("pageerror", lambda e: errors.append(str(e)))
+    reqs = []
+    page.on("request", lambda r: reqs.append(r.url) if not r.url.startswith("file://") else None)
+
+    def go(name): page.goto((DIST / name).as_uri()); page.wait_for_load_state("load")
+
+    # homepage + search
+    go("index.html")
+    check("home shows 7 tool cards", page.locator("a.card[data-search]").count() == 7)
+    page.fill("#q", "emi")
+    visible = page.locator("a.card[data-search]:visible").count()
+    check("search 'emi' -> 1 card", visible == 1, str(visible))
+    page.fill("#q", "zzzz")
+    check("search no match shows message", page.locator("#none").is_visible())
+    page.fill("#q", "")
+    check("home no horizontal overflow @375", page.evaluate("document.documentElement.scrollWidth <= innerWidth"))
+
+    # age
+    go("tools/age-calculator.html")
+    page.fill("#dob", "2000-01-15"); page.fill("#ref", "2024-03-10")
+    t = txt(page)
+    check("age result", "24 years, 1 month, 24 days" in t, t)
+    page.fill("#dob", "2030-01-01")
+    check("age error future dob", "before" in txt(page))
+
+    # percentage (+ label switch)
+    go("tools/percentage-calculator.html")
+    page.fill("#a", "20"); page.fill("#b", "150")
+    check("pct of", "30" in txt(page).replace("\n", " "))
+    page.select_option("#mode", "change"); page.fill("#a", "50"); page.fill("#b", "75")
+    check("pct change", "+50%" in txt(page), txt(page))
+    check("pct label updates", page.inner_text("label[for=a]").startswith("Old value"))
+    page.select_option("#mode", "what"); page.fill("#a", "5"); page.fill("#b", "0")
+    check("pct div by zero error", "cannot be 0" in txt(page))
+
+    # emi
+    go("tools/emi-calculator.html")
+    page.fill("#amount", "100000"); page.fill("#rate", "10"); page.fill("#tenure", "1")
+    t = txt(page)
+    check("emi 1 year", "8,791.59" in t, t)
+    page.select_option("#unit", "months"); page.fill("#tenure", "12")
+    check("emi 12 months same", "8,791.59" in txt(page))
+
+    # discount
+    go("tools/discount-calculator.html")
+    page.fill("#price", "1000"); page.fill("#pct", "20")
+    check("discount pay 800", "800.00" in txt(page), txt(page))
+    page.fill("#tax", "18")
+    check("discount with tax 944", "944.00" in txt(page), txt(page))
+
+    # word counter
+    go("tools/word-counter.html")
+    page.fill("#text", "Hello world. How are you?")
+    t = txt(page).replace("\n", " ")
+    check("word count 5", "Words 5" in t, t)
+    check("char count 25", "Characters 25" in t, t)
+
+    # case converter
+    go("tools/case-converter.html")
+    page.fill("#text", "hello WORLD foo"); page.select_option("#mode", "snake")
+    check("case snake", page.input_value("#out textarea") == "hello_world_foo", page.input_value("#out textarea"))
+
+    # password
+    go("tools/password-generator.html")
+    first = page.inner_text("#out .pw")
+    check("password length 16", len(first) == 16, first)
+    page.click("text=Generate new")
+    check("password regenerates", page.inner_text("#out .pw") != first)
+    page.fill("#length", "4")
+    check("password length error", "8 to 64" in txt(page))
+    page.fill("#length", "20")
+    for i in ("lower", "upper", "digits", "symbols"):
+        if i != "digits": page.uncheck("#" + i)
+    check("digits only", page.inner_text("#out .pw").isdigit() and len(page.inner_text("#out .pw")) == 20)
+    page.uncheck("#digits")
+    check("no sets error", "at least one" in txt(page))
+
+    # all pages: no overflow, no external requests, no console errors
+    for f in ["index.html"] + ["tools/" + x.name for x in (DIST / "tools").iterdir()]:
+        go(f)
+        check(f"{f} no overflow", page.evaluate("document.documentElement.scrollWidth <= innerWidth"))
+    check("no console errors", not errors, str(errors))
+    check("no network requests beyond local files", not reqs, str(reqs))
+    b.close()
+
+print(f"passed {passes}, failed {len(fails)}")
+for f in fails: print("FAIL:", f)
+sys.exit(1 if fails else 0)

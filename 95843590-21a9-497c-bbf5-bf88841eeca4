@@ -1,0 +1,414 @@
+(function (root, factory) {
+  if (typeof module === 'object' && module.exports) module.exports = factory();
+  else root.BoxCalc = factory();
+})(typeof self !== 'undefined' ? self : this, function () {
+  'use strict';
+
+  function pad(n) { return n < 10 ? '0' + n : '' + n; }
+  function todayISO() {
+    var d = new Date();
+    return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+  }
+  function parseISO(s) {
+    var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s || '');
+    if (!m) return null;
+    var y = +m[1], mo = +m[2], d = +m[3];
+    var t = new Date(Date.UTC(y, mo - 1, d));
+    if (t.getUTCFullYear() !== y || t.getUTCMonth() !== mo - 1 || t.getUTCDate() !== d) return null;
+    return { y: y, m: mo, d: d, t: t.getTime() };
+  }
+  function dim(y, m) { return new Date(Date.UTC(y, m, 0)).getUTCDate(); }
+  var DAY = 86400000;
+  var WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+  function age(dobStr, refStr) {
+    var b = parseISO(dobStr), r = parseISO(refStr);
+    if (!b || !r) return { error: 'Enter valid dates.' };
+    if (b.t > r.t) return { error: 'Date of birth must be before the comparison date.' };
+    var years = r.y - b.y, months = r.m - b.m, days = r.d - b.d;
+    if (days < 0) {
+      months--;
+      var pm = r.m - 1, py = r.y;
+      if (pm === 0) { pm = 12; py--; }
+      days += dim(py, pm);
+    }
+    if (months < 0) { years--; months += 12; }
+    var ny = r.y;
+    var nd = Math.min(b.d, dim(ny, b.m));
+    var next = Date.UTC(ny, b.m - 1, nd);
+    if (next < r.t) { ny++; nd = Math.min(b.d, dim(ny, b.m)); next = Date.UTC(ny, b.m - 1, nd); }
+    return {
+      years: years, months: months, days: days,
+      totalDays: Math.round((r.t - b.t) / DAY),
+      totalMonths: years * 12 + months,
+      daysToBirthday: Math.round((next - r.t) / DAY),
+      bornWeekday: WEEKDAYS[new Date(b.t).getUTCDay()]
+    };
+  }
+
+  function percentage(mode, a, b) {
+    if (!isFinite(a) || !isFinite(b)) return { error: 'Enter valid numbers.' };
+    if (mode === 'of') return { value: a / 100 * b };
+    if (mode === 'what') {
+      if (b === 0) return { error: 'The total cannot be 0.' };
+      return { value: a / b * 100 };
+    }
+    if (mode === 'change') {
+      if (a === 0) return { error: 'The old value cannot be 0.' };
+      return { value: (b - a) / Math.abs(a) * 100 };
+    }
+    return { error: 'Unknown mode.' };
+  }
+
+  function emi(principal, annualRate, months) {
+    if (!isFinite(principal) || !isFinite(annualRate) || !isFinite(months)) return { error: 'Enter valid numbers.' };
+    if (principal <= 0) return { error: 'Loan amount must be greater than 0.' };
+    if (annualRate < 0) return { error: 'Interest rate cannot be negative.' };
+    if (months < 1 || Math.floor(months) !== months) return { error: 'Tenure must be a whole number of months, at least 1.' };
+    var r = annualRate / 1200, e;
+    if (r === 0) e = principal / months;
+    else {
+      var f = Math.pow(1 + r, months);
+      e = principal * r * f / (f - 1);
+    }
+    var total = e * months;
+    return { emi: e, total: total, interest: total - principal, principal: principal };
+  }
+
+  function discount(price, pct, taxPct) {
+    taxPct = taxPct || 0;
+    if (!isFinite(price) || !isFinite(pct) || !isFinite(taxPct)) return { error: 'Enter valid numbers.' };
+    if (price < 0) return { error: 'Price cannot be negative.' };
+    if (pct < 0 || pct > 100) return { error: 'Discount must be between 0 and 100.' };
+    if (taxPct < 0) return { error: 'Tax cannot be negative.' };
+    var saved = price * pct / 100, after = price - saved, tax = after * taxPct / 100;
+    return { saved: saved, after: after, tax: tax, pay: after + tax };
+  }
+
+  function textStats(text) {
+    text = text || '';
+    var w = text.match(/\S+/g);
+    var words = w ? w.length : 0;
+    var chars = Array.from(text).length;
+    var noSpace = Array.from(text.replace(/\s/g, '')).length;
+    var sentences = text.split(/[.!?]+(?:\s+|$)/).filter(function (s) { return s.trim() !== ''; }).length;
+    var paragraphs = text.split(/\n\s*\n/).filter(function (s) { return s.trim() !== ''; }).length;
+    return {
+      words: words, chars: chars, charsNoSpaces: noSpace, sentences: sentences,
+      paragraphs: paragraphs, readingSeconds: Math.round(words / 200 * 60)
+    };
+  }
+
+  function wordsOf(text) {
+    return (text.toLowerCase().match(/[a-z0-9À-￿]+/g)) || [];
+  }
+  function convertCase(text, mode) {
+    text = text || '';
+    switch (mode) {
+      case 'upper': return text.toUpperCase();
+      case 'lower': return text.toLowerCase();
+      case 'title': return text.toLowerCase().replace(/(^|[\s\-_(])([a-zà-￿])/g, function (m, p, c) { return p + c.toUpperCase(); });
+      case 'sentence': return text.toLowerCase().replace(/(^\s*|[.!?]\s+)([a-zà-￿])/g, function (m, p, c) { return p + c.toUpperCase(); });
+      case 'camel': return wordsOf(text).map(function (w, i) { return i ? w.charAt(0).toUpperCase() + w.slice(1) : w; }).join('');
+      case 'snake': return wordsOf(text).join('_');
+      case 'kebab': return wordsOf(text).join('-');
+      default: return text;
+    }
+  }
+
+  var SETS = {
+    lower: 'abcdefghijklmnopqrstuvwxyz',
+    upper: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ',
+    digits: '0123456789',
+    symbols: '!@#$%^&*()-_=+[]{};:,.?'
+  };
+  function randInt(max) {
+    var c = (typeof crypto !== 'undefined' && crypto.getRandomValues) ? crypto : null;
+    if (!c) throw new Error('Secure random generator not available in this browser.');
+    var limit = Math.floor(4294967296 / max) * max, buf = new Uint32Array(1);
+    do { c.getRandomValues(buf); } while (buf[0] >= limit);
+    return buf[0] % max;
+  }
+  function password(opts) {
+    var len = opts.length, chosen = [];
+    ['lower', 'upper', 'digits', 'symbols'].forEach(function (k) { if (opts[k]) chosen.push(SETS[k]); });
+    if (!isFinite(len) || Math.floor(len) !== len || len < 8 || len > 64) return { error: 'Length must be a whole number from 8 to 64.' };
+    if (!chosen.length) return { error: 'Select at least one character type.' };
+    var all = chosen.join(''), out = [], i;
+    chosen.forEach(function (s) { out.push(s.charAt(randInt(s.length))); });
+    while (out.length < len) out.push(all.charAt(randInt(all.length)));
+    for (i = out.length - 1; i > 0; i--) {
+      var j = randInt(i + 1), t = out[i]; out[i] = out[j]; out[j] = t;
+    }
+    var bits = Math.floor(len * Math.log(all.length) / Math.LN2);
+    return { value: out.join(''), bits: bits };
+  }
+
+  return {
+    todayISO: todayISO, age: age, percentage: percentage, emi: emi, discount: discount,
+    textStats: textStats, convertCase: convertCase, password: password
+  };
+});
+
+(function (root, factory) {
+  var calc = (typeof require === 'function') ? require('./calc.js') : root.BoxCalc;
+  var api = factory(calc);
+  if (typeof module === 'object' && module.exports) module.exports = api;
+  else root.BoxTools = api;
+})(typeof self !== 'undefined' ? self : this, function (C) {
+  'use strict';
+
+  var nf = new Intl.NumberFormat('en-IN', { maximumFractionDigits: 2, minimumFractionDigits: 2 });
+  var ni = new Intl.NumberFormat('en-IN', { maximumFractionDigits: 0 });
+  function money(n) { return nf.format(n); }
+  function int(n) { return ni.format(n); }
+  function num(s) { return s === '' || s == null ? NaN : parseFloat(s); }
+  function fmtTime(sec) {
+    if (sec < 60) return sec + ' sec';
+    var m = Math.floor(sec / 60), s = sec % 60;
+    return m + ' min' + (s ? ' ' + s + ' sec' : '');
+  }
+  function plural(n, w) { return n + ' ' + w + (n === 1 ? '' : 's'); }
+
+  var TOOLS = [
+    {
+      slug: 'age-calculator', name: 'Age calculator', cat: 'CalcBox',
+      desc: 'Find your exact age in years, months and days, plus your next birthday.',
+      fields: [
+        { id: 'dob', label: 'Date of birth', type: 'date' },
+        { id: 'ref', label: 'Age on this date (optional)', type: 'date', hint: 'Leave empty to use today.' }
+      ],
+      compute: function (v) {
+        if (!v.dob) return { empty: 'Pick a date of birth to see the result.' };
+        var r = C.age(v.dob, v.ref || C.todayISO());
+        if (r.error) return { error: r.error };
+        return { rows: [
+          ['Age', plural(r.years, 'year') + ', ' + plural(r.months, 'month') + ', ' + plural(r.days, 'day'), 1],
+          ['Total months', int(r.totalMonths)],
+          ['Total days', int(r.totalDays)],
+          ['Born on a', r.bornWeekday],
+          ['Next birthday in', r.daysToBirthday === 0 ? 'Today' : plural(r.daysToBirthday, 'day')]
+        ] };
+      }
+    },
+    {
+      slug: 'percentage-calculator', name: 'Percentage calculator', cat: 'CalcBox',
+      desc: 'Percent of a number, what percent one number is of another, and percent change.',
+      fields: [
+        { id: 'mode', label: 'What do you want to find?', type: 'select', value: 'of', options: [
+          ['of', 'X% of Y'], ['what', 'X is what % of Y'], ['change', '% change from X to Y']] },
+        { id: 'a', label: 'Percentage (X)', type: 'number', step: 'any' },
+        { id: 'b', label: 'Number (Y)', type: 'number', step: 'any' }
+      ],
+      labels: { of: ['Percentage (X)', 'Number (Y)'], what: ['Number (X)', 'Total (Y)'], change: ['Old value (X)', 'New value (Y)'] },
+      compute: function (v) {
+        var a = num(v.a), b = num(v.b);
+        if (isNaN(a) || isNaN(b)) return { empty: 'Enter both numbers to see the result.' };
+        var r = C.percentage(v.mode, a, b);
+        if (r.error) return { error: r.error };
+        var val = Math.round(r.value * 1e6) / 1e6;
+        var txt = v.mode === 'of' ? String(val) : val + '%';
+        if (v.mode === 'change') txt = (val > 0 ? '+' : '') + txt;
+        return { rows: [['Result', txt, 1]] };
+      }
+    },
+    {
+      slug: 'emi-calculator', name: 'EMI calculator', cat: 'CalcBox',
+      desc: 'Monthly loan EMI, total interest and total payment for any loan.',
+      fields: [
+        { id: 'amount', label: 'Loan amount', type: 'number', step: 'any', min: '0' },
+        { id: 'rate', label: 'Interest rate (% per year)', type: 'number', step: 'any', min: '0' },
+        { id: 'tenure', label: 'Tenure', type: 'number', step: '1', min: '1' },
+        { id: 'unit', label: 'Tenure in', type: 'select', value: 'years', options: [['years', 'Years'], ['months', 'Months']] }
+      ],
+      compute: function (v) {
+        var p = num(v.amount), r = num(v.rate), t = num(v.tenure);
+        if (isNaN(p) || isNaN(r) || isNaN(t)) return { empty: 'Fill in all fields to see the result.' };
+        var months = v.unit === 'years' ? t * 12 : t;
+        var res = C.emi(p, r, months);
+        if (res.error) return { error: res.error };
+        return { rows: [
+          ['Monthly EMI', money(res.emi), 1],
+          ['Total interest', money(res.interest)],
+          ['Total payment', money(res.total)],
+          ['Interest share of payment', (res.interest / res.total * 100).toFixed(1) + '%']
+        ] };
+      }
+    },
+    {
+      slug: 'discount-calculator', name: 'Discount calculator', cat: 'CalcBox',
+      desc: 'Final price after a discount, with an optional tax such as GST.',
+      fields: [
+        { id: 'price', label: 'Original price', type: 'number', step: 'any', min: '0' },
+        { id: 'pct', label: 'Discount (%)', type: 'number', step: 'any', min: '0', max: '100' },
+        { id: 'tax', label: 'Tax (%) (optional)', type: 'number', step: 'any', min: '0', hint: 'Applied after the discount.' }
+      ],
+      compute: function (v) {
+        var p = num(v.price), d = num(v.pct), t = v.tax === '' ? 0 : num(v.tax);
+        if (isNaN(p) || isNaN(d)) return { empty: 'Enter a price and a discount to see the result.' };
+        var r = C.discount(p, d, t);
+        if (r.error) return { error: r.error };
+        var rows = [['You pay', money(r.pay), 1], ['You save', money(r.saved)], ['Price after discount', money(r.after)]];
+        if (t) rows.push(['Tax', money(r.tax)]);
+        return { rows: rows };
+      }
+    },
+    {
+      slug: 'word-counter', name: 'Word and character counter', cat: 'TextBox',
+      desc: 'Count words, characters, sentences and paragraphs, with reading time.',
+      fields: [{ id: 'text', label: 'Your text', type: 'textarea', rows: 8 }],
+      compute: function (v) {
+        var s = C.textStats(v.text);
+        return { rows: [
+          ['Words', int(s.words), 1], ['Characters', int(s.chars)],
+          ['Characters (no spaces)', int(s.charsNoSpaces)], ['Sentences', int(s.sentences)],
+          ['Paragraphs', int(s.paragraphs)], ['Reading time', fmtTime(s.readingSeconds)]
+        ] };
+      }
+    },
+    {
+      slug: 'case-converter', name: 'Case converter', cat: 'TextBox',
+      desc: 'Change text to UPPER, lower, Title, Sentence, camelCase, snake_case or kebab-case.',
+      fields: [
+        { id: 'mode', label: 'Convert to', type: 'select', value: 'title', options: [
+          ['upper', 'UPPER CASE'], ['lower', 'lower case'], ['title', 'Title Case'], ['sentence', 'Sentence case'],
+          ['camel', 'camelCase'], ['snake', 'snake_case'], ['kebab', 'kebab-case']] },
+        { id: 'text', label: 'Your text', type: 'textarea', rows: 6 }
+      ],
+      output: 'text',
+      compute: function (v) {
+        if (!v.text) return { empty: 'Type or paste text to convert.' };
+        return { text: C.convertCase(v.text, v.mode) };
+      }
+    },
+    {
+      slug: 'password-generator', name: 'Password generator', cat: 'SmartBox',
+      desc: 'Create strong random passwords using your browser’s secure random generator.',
+      fields: [
+        { id: 'length', label: 'Length (8 to 64)', type: 'number', step: '1', min: '8', max: '64', value: '16' },
+        { id: 'lower', label: 'Lowercase letters', type: 'checkbox', value: true },
+        { id: 'upper', label: 'Uppercase letters', type: 'checkbox', value: true },
+        { id: 'digits', label: 'Numbers', type: 'checkbox', value: true },
+        { id: 'symbols', label: 'Symbols', type: 'checkbox', value: true }
+      ],
+      output: 'password',
+      compute: function (v) {
+        var r = C.password({ length: num(v.length), lower: v.lower, upper: v.upper, digits: v.digits, symbols: v.symbols });
+        if (r.error) return { error: r.error };
+        return { password: r.value, note: 'About ' + r.bits + ' bits of entropy. Generated on your device.' };
+      }
+    }
+  ];
+
+  var SOON = [
+    { name: 'ImageBox', desc: 'Compress and resize images.' },
+    { name: 'FileBox', desc: 'Merge and split PDFs.' },
+    { name: 'SmartBox: QR code', desc: 'Generate QR codes.' }
+  ];
+
+  return {
+    TOOLS: TOOLS, SOON: SOON,
+    bySlug: function (s) { for (var i = 0; i < TOOLS.length; i++) if (TOOLS[i].slug === s) return TOOLS[i]; return null; }
+  };
+});
+
+(function () {
+  'use strict';
+  if (typeof document === 'undefined') return;
+  var T = window.BoxTools;
+
+  function el(tag, cls, text) {
+    var e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text != null) e.textContent = text;
+    return e;
+  }
+  function copy(text, btn) {
+    function done() { var o = btn.textContent; btn.textContent = 'Copied'; setTimeout(function () { btn.textContent = o; }, 1200); }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done, fallback);
+    } else fallback();
+    function fallback() {
+      var t = document.createElement('textarea');
+      t.value = text; t.setAttribute('readonly', ''); t.style.position = 'absolute'; t.style.left = '-9999px';
+      document.body.appendChild(t); t.select();
+      try { document.execCommand('copy'); done(); } catch (e) { btn.textContent = 'Press Ctrl+C'; }
+      document.body.removeChild(t);
+    }
+  }
+
+  function initTool(form) {
+    var tool = T.bySlug(form.getAttribute('data-slug'));
+    if (!tool) return;
+    var out = document.getElementById('out');
+    var inputs = {};
+    tool.fields.forEach(function (f) { inputs[f.id] = document.getElementById(f.id); });
+
+    function values() {
+      var v = {};
+      tool.fields.forEach(function (f) {
+        var i = inputs[f.id];
+        v[f.id] = f.type === 'checkbox' ? i.checked : i.value;
+      });
+      return v;
+    }
+    function setLabels() {
+      if (!tool.labels) return;
+      var l = tool.labels[inputs.mode.value];
+      document.querySelector('label[for=a]').textContent = l[0];
+      document.querySelector('label[for=b]').textContent = l[1];
+    }
+    function run() {
+      var r = tool.compute(values());
+      out.textContent = '';
+      if (r.empty) { out.appendChild(el('p', 'msg', r.empty)); return; }
+      if (r.error) { out.appendChild(el('p', 'msg err', r.error)); return; }
+      if (r.rows) {
+        r.rows.forEach(function (row) {
+          var d = el('div', 'res-row' + (row[2] ? ' main' : ''));
+          d.appendChild(el('span', null, row[0]));
+          d.appendChild(el('strong', null, row[1]));
+          out.appendChild(d);
+        });
+      } else if (r.text != null) {
+        var ta = el('textarea'); ta.readOnly = true; ta.value = r.text; ta.rows = 6;
+        ta.setAttribute('aria-label', 'Converted text');
+        out.appendChild(ta);
+        var a = el('div', 'actions'), b = el('button', null, 'Copy');
+        b.type = 'button'; b.onclick = function () { copy(r.text, b); };
+        a.appendChild(b); out.appendChild(a);
+      } else if (r.password != null) {
+        out.appendChild(el('div', 'pw', r.password));
+        out.appendChild(el('p', 'msg', r.note));
+        var a2 = el('div', 'actions');
+        var c = el('button', null, 'Copy'); c.type = 'button'; c.onclick = function () { copy(r.password, c); };
+        var g = el('button', 'ghost', 'Generate new'); g.type = 'button'; g.onclick = run;
+        a2.appendChild(c); a2.appendChild(g); out.appendChild(a2);
+      }
+    }
+    form.addEventListener('input', run);
+    form.addEventListener('change', function () { setLabels(); run(); });
+    form.addEventListener('submit', function (e) { e.preventDefault(); run(); });
+    setLabels(); run();
+  }
+
+  function initSearch(q) {
+    var cards = document.querySelectorAll('[data-search]');
+    var empty = document.getElementById('none');
+    function f() {
+      var s = q.value.trim().toLowerCase(), shown = 0;
+      Array.prototype.forEach.call(cards, function (c) {
+        var ok = !s || c.getAttribute('data-search').indexOf(s) !== -1;
+        c.style.display = ok ? '' : 'none';
+        if (ok) shown++;
+      });
+      empty.style.display = shown ? 'none' : 'block';
+    }
+    q.addEventListener('input', f);
+  }
+
+  var form = document.getElementById('tool-form');
+  if (form) initTool(form);
+  var q = document.getElementById('q');
+  if (q) initSearch(q);
+})();

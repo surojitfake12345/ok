@@ -1,0 +1,151 @@
+(function (root, factory) {
+  if (typeof module === 'object' && module.exports) module.exports = factory();
+  else root.BoxCalc = factory();
+})(typeof self !== 'undefined' ? self : this, function () {
+  'use strict';
+
+  function pad(n) { return n < 10 ? '0' + n : '' + n; }
+  function todayISO() {
+    var d = new Date();
+    return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+  }
+  function parseISO(s) {
+    var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s || '');
+    if (!m) return null;
+    var y = +m[1], mo = +m[2], d = +m[3];
+    var t = new Date(Date.UTC(y, mo - 1, d));
+    if (t.getUTCFullYear() !== y || t.getUTCMonth() !== mo - 1 || t.getUTCDate() !== d) return null;
+    return { y: y, m: mo, d: d, t: t.getTime() };
+  }
+  function dim(y, m) { return new Date(Date.UTC(y, m, 0)).getUTCDate(); }
+  var DAY = 86400000;
+  var WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+  function age(dobStr, refStr) {
+    var b = parseISO(dobStr), r = parseISO(refStr);
+    if (!b || !r) return { error: 'Enter valid dates.' };
+    if (b.t > r.t) return { error: 'Date of birth must be before the comparison date.' };
+    var years = r.y - b.y, months = r.m - b.m, days = r.d - b.d;
+    if (days < 0) {
+      months--;
+      var pm = r.m - 1, py = r.y;
+      if (pm === 0) { pm = 12; py--; }
+      days += dim(py, pm);
+    }
+    if (months < 0) { years--; months += 12; }
+    var ny = r.y;
+    var nd = Math.min(b.d, dim(ny, b.m));
+    var next = Date.UTC(ny, b.m - 1, nd);
+    if (next < r.t) { ny++; nd = Math.min(b.d, dim(ny, b.m)); next = Date.UTC(ny, b.m - 1, nd); }
+    return {
+      years: years, months: months, days: days,
+      totalDays: Math.round((r.t - b.t) / DAY),
+      totalMonths: years * 12 + months,
+      daysToBirthday: Math.round((next - r.t) / DAY),
+      bornWeekday: WEEKDAYS[new Date(b.t).getUTCDay()]
+    };
+  }
+
+  function percentage(mode, a, b) {
+    if (!isFinite(a) || !isFinite(b)) return { error: 'Enter valid numbers.' };
+    if (mode === 'of') return { value: a / 100 * b };
+    if (mode === 'what') {
+      if (b === 0) return { error: 'The total cannot be 0.' };
+      return { value: a / b * 100 };
+    }
+    if (mode === 'change') {
+      if (a === 0) return { error: 'The old value cannot be 0.' };
+      return { value: (b - a) / Math.abs(a) * 100 };
+    }
+    return { error: 'Unknown mode.' };
+  }
+
+  function emi(principal, annualRate, months) {
+    if (!isFinite(principal) || !isFinite(annualRate) || !isFinite(months)) return { error: 'Enter valid numbers.' };
+    if (principal <= 0) return { error: 'Loan amount must be greater than 0.' };
+    if (annualRate < 0) return { error: 'Interest rate cannot be negative.' };
+    if (months < 1 || Math.floor(months) !== months) return { error: 'Tenure must be a whole number of months, at least 1.' };
+    var r = annualRate / 1200, e;
+    if (r === 0) e = principal / months;
+    else {
+      var f = Math.pow(1 + r, months);
+      e = principal * r * f / (f - 1);
+    }
+    var total = e * months;
+    return { emi: e, total: total, interest: total - principal, principal: principal };
+  }
+
+  function discount(price, pct, taxPct) {
+    taxPct = taxPct || 0;
+    if (!isFinite(price) || !isFinite(pct) || !isFinite(taxPct)) return { error: 'Enter valid numbers.' };
+    if (price < 0) return { error: 'Price cannot be negative.' };
+    if (pct < 0 || pct > 100) return { error: 'Discount must be between 0 and 100.' };
+    if (taxPct < 0) return { error: 'Tax cannot be negative.' };
+    var saved = price * pct / 100, after = price - saved, tax = after * taxPct / 100;
+    return { saved: saved, after: after, tax: tax, pay: after + tax };
+  }
+
+  function textStats(text) {
+    text = text || '';
+    var w = text.match(/\S+/g);
+    var words = w ? w.length : 0;
+    var chars = Array.from(text).length;
+    var noSpace = Array.from(text.replace(/\s/g, '')).length;
+    var sentences = text.split(/[.!?]+(?:\s+|$)/).filter(function (s) { return s.trim() !== ''; }).length;
+    var paragraphs = text.split(/\n\s*\n/).filter(function (s) { return s.trim() !== ''; }).length;
+    return {
+      words: words, chars: chars, charsNoSpaces: noSpace, sentences: sentences,
+      paragraphs: paragraphs, readingSeconds: Math.round(words / 200 * 60)
+    };
+  }
+
+  function wordsOf(text) {
+    return (text.toLowerCase().match(/[a-z0-9À-￿]+/g)) || [];
+  }
+  function convertCase(text, mode) {
+    text = text || '';
+    switch (mode) {
+      case 'upper': return text.toUpperCase();
+      case 'lower': return text.toLowerCase();
+      case 'title': return text.toLowerCase().replace(/(^|[\s\-_(])([a-zà-￿])/g, function (m, p, c) { return p + c.toUpperCase(); });
+      case 'sentence': return text.toLowerCase().replace(/(^\s*|[.!?]\s+)([a-zà-￿])/g, function (m, p, c) { return p + c.toUpperCase(); });
+      case 'camel': return wordsOf(text).map(function (w, i) { return i ? w.charAt(0).toUpperCase() + w.slice(1) : w; }).join('');
+      case 'snake': return wordsOf(text).join('_');
+      case 'kebab': return wordsOf(text).join('-');
+      default: return text;
+    }
+  }
+
+  var SETS = {
+    lower: 'abcdefghijklmnopqrstuvwxyz',
+    upper: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ',
+    digits: '0123456789',
+    symbols: '!@#$%^&*()-_=+[]{};:,.?'
+  };
+  function randInt(max) {
+    var c = (typeof crypto !== 'undefined' && crypto.getRandomValues) ? crypto : null;
+    if (!c) throw new Error('Secure random generator not available in this browser.');
+    var limit = Math.floor(4294967296 / max) * max, buf = new Uint32Array(1);
+    do { c.getRandomValues(buf); } while (buf[0] >= limit);
+    return buf[0] % max;
+  }
+  function password(opts) {
+    var len = opts.length, chosen = [];
+    ['lower', 'upper', 'digits', 'symbols'].forEach(function (k) { if (opts[k]) chosen.push(SETS[k]); });
+    if (!isFinite(len) || Math.floor(len) !== len || len < 8 || len > 64) return { error: 'Length must be a whole number from 8 to 64.' };
+    if (!chosen.length) return { error: 'Select at least one character type.' };
+    var all = chosen.join(''), out = [], i;
+    chosen.forEach(function (s) { out.push(s.charAt(randInt(s.length))); });
+    while (out.length < len) out.push(all.charAt(randInt(all.length)));
+    for (i = out.length - 1; i > 0; i--) {
+      var j = randInt(i + 1), t = out[i]; out[i] = out[j]; out[j] = t;
+    }
+    var bits = Math.floor(len * Math.log(all.length) / Math.LN2);
+    return { value: out.join(''), bits: bits };
+  }
+
+  return {
+    todayISO: todayISO, age: age, percentage: percentage, emi: emi, discount: discount,
+    textStats: textStats, convertCase: convertCase, password: password
+  };
+});

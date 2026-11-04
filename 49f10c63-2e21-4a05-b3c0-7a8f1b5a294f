@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Discount calculator | BoxUser</title>
+<meta name="description" content="Final price after a discount, with an optional tax such as GST.">
+<meta name="theme-color" content="#4F46E5">
+<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../assets/app.css">
+</head><body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><symbol id="bx" viewBox="0 0 100 100"><polygon points="50,8 88,29 50,50 12,29" fill="var(--lg-t)"/><polygon points="12,29 50,50 50,92 12,71" fill="var(--lg-l)"/><polygon points="88,29 50,50 50,92 88,71" fill="var(--lg-r)"/><circle cx="50" cy="29" r="8" fill="var(--lg-d)"/></symbol></svg>
+<header class="top"><div class="wrap"><a class="brand" href="../index.html" aria-label="BoxUser home"><svg width="30" height="30" aria-hidden="true"><use href="#bx"/></svg><span>Box<b>User</b></span></a><nav><a href="../index.html#tools">All tools</a></nav></div></header>
+<main class="wrap">
+<div class="crumb"><a href="../index.html">Home</a> / CalcBox</div>
+<h1 class="t">Discount calculator</h1>
+<p class="lead">Final price after a discount, with an optional tax such as GST.</p>
+<div class="tool">
+<form class="panel" id="tool-form" data-slug="discount-calculator" novalidate><div class="field"><label for="price">Original price</label><input id="price" type="number" step="any" min="0" inputmode="decimal"></div><div class="field"><label for="pct">Discount (%)</label><input id="pct" type="number" step="any" min="0" max="100" inputmode="decimal"></div><div class="field"><label for="tax">Tax (%) (optional)</label><input id="tax" type="number" step="any" min="0" inputmode="decimal"><div class="hint">Applied after the discount.</div></div></form>
+<section class="panel" aria-live="polite" aria-label="Result"><div id="out"><p class="msg">Loading...</p></div></section>
+</div>
+<h2>More tools</h2><div class="grid"><a class="card" href="age-calculator.html"><strong>Age calculator</strong></a><a class="card" href="percentage-calculator.html"><strong>Percentage calculator</strong></a><a class="card" href="emi-calculator.html"><strong>EMI calculator</strong></a><a class="card" href="word-counter.html"><strong>Word and character counter</strong></a><a class="card" href="case-converter.html"><strong>Case converter</strong></a><a class="card" href="password-generator.html"><strong>Password generator</strong></a></div>
+</main>
+<footer><div class="wrap">BoxUser. Free tools, no ads. These tools run in your browser and BoxUser's code does not send what you enter to any server.</div></footer>
+<script src="../assets/app.js" defer></script>
+</body></html>

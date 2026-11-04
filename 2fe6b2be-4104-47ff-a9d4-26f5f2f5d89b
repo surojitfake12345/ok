@@ -1,0 +1,107 @@
+const fs = require('fs');
+const path = require('path');
+const { TOOLS, SOON } = require('./src/js/tools.js');
+
+const SRC = path.join(__dirname, 'src');
+const DIST = path.join(__dirname, 'dist');
+const read = (p) => fs.readFileSync(path.join(SRC, p), 'utf8');
+const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+fs.rmSync(DIST, { recursive: true, force: true });
+fs.mkdirSync(path.join(DIST, 'tools'), { recursive: true });
+fs.mkdirSync(path.join(DIST, 'assets'), { recursive: true });
+
+/* ---------- logo (Concept A: cube + user dot) ---------- */
+const FACES = (c) => `<polygon points="50,8 88,29 50,50 12,29" fill="${c.t}"/><polygon points="12,29 50,50 50,92 12,71" fill="${c.l}"/><polygon points="88,29 50,50 50,92 88,71" fill="${c.r}"/>`;
+const LIGHT = { t: '#818CF8', l: '#4F46E5', r: '#3730A3', d: '#FFFFFF' };
+const symbolSvg = (c, dotR) => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">${FACES(c)}<circle cx="50" cy="29" r="${dotR}" fill="${c.d}"/></svg>`;
+fs.writeFileSync(path.join(DIST, 'assets/logo-symbol.svg'), symbolSvg(LIGHT, 8));
+fs.writeFileSync(path.join(DIST, 'assets/favicon.svg'), symbolSvg(LIGHT, 11));
+fs.writeFileSync(path.join(DIST, 'assets/logo-symbol-mono.svg'), `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><polygon points="50,8 88,29 50,50 12,29" fill="#0F172A" fill-opacity=".45"/><polygon points="12,29 50,50 50,92 12,71" fill="#0F172A" fill-opacity=".75"/><polygon points="88,29 50,50 50,92 88,71" fill="#0F172A"/><circle cx="50" cy="29" r="8" fill="#fff"/></svg>`);
+fs.writeFileSync(path.join(DIST, 'assets/app-icon.svg'), `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" rx="22" fill="#4F46E5"/><g transform="translate(16 16) scale(.68)"><polygon points="50,8 88,29 50,50 12,29" fill="#fff"/><polygon points="12,29 50,50 50,92 12,71" fill="#C7D2FE"/><polygon points="88,29 50,50 50,92 88,71" fill="#A5B4FC"/><circle cx="50" cy="29" r="9" fill="#4F46E5"/></g></svg>`);
+fs.writeFileSync(path.join(DIST, 'assets/logo-horizontal.svg'), `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 260 64"><g transform="scale(.6)">${FACES(LIGHT)}<circle cx="50" cy="29" r="8" fill="#fff"/></g><text x="70" y="44" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Arial,sans-serif" font-size="36" font-weight="500" letter-spacing="-1" fill="#0F172A">Box<tspan font-weight="400" fill="#4F46E5">User</tspan></text></svg>`);
+
+const SPRITE = `<svg width="0" height="0" style="position:absolute" aria-hidden="true"><symbol id="bx" viewBox="0 0 100 100"><polygon points="50,8 88,29 50,50 12,29" fill="var(--lg-t)"/><polygon points="12,29 50,50 50,92 12,71" fill="var(--lg-l)"/><polygon points="88,29 50,50 50,92 88,71" fill="var(--lg-r)"/><circle cx="50" cy="29" r="8" fill="var(--lg-d)"/></symbol></svg>`;
+const HERO_LOGO = `<svg class="logo-anim" width="72" height="72" viewBox="0 0 100 100" role="img" aria-label="BoxUser logo"><polygon class="f f1" points="50,8 88,29 50,50 12,29" fill="var(--lg-t)"/><polygon class="f f2" points="12,29 50,50 50,92 12,71" fill="var(--lg-l)"/><polygon class="f f3" points="88,29 50,50 50,92 88,71" fill="var(--lg-r)"/><circle class="d" cx="50" cy="29" r="8" fill="var(--lg-d)"/></svg>`;
+
+/* ---------- assets: css + js bundle ---------- */
+const css = (read('css/tokens.css') + read('css/site.css')).replace(/\n+/g, '\n');
+fs.writeFileSync(path.join(DIST, 'assets/app.css'), css);
+const js = ['js/calc.js', 'js/tools.js', 'js/ui.js'].map(read).join('\n');
+fs.writeFileSync(path.join(DIST, 'assets/app.js'), js);
+
+/* ---------- page shell ---------- */
+function page({ title, desc, body, root, scripts }) {
+  return `<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>${esc(title)}</title>
+<meta name="description" content="${esc(desc)}">
+<meta name="theme-color" content="#4F46E5">
+<link rel="icon" href="${root}assets/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="${root}assets/app.css">
+</head><body>
+${SPRITE}
+<header class="top"><div class="wrap"><a class="brand" href="${root}index.html" aria-label="BoxUser home"><svg width="30" height="30" aria-hidden="true"><use href="#bx"/></svg><span>Box<b>User</b></span></a><nav><a href="${root}index.html#tools">All tools</a></nav></div></header>
+${body}
+<footer><div class="wrap">BoxUser. Free tools, no ads. These tools run in your browser and BoxUser's code does not send what you enter to any server.</div></footer>
+<script src="${root}assets/app.js" defer></script>
+</body></html>`;
+}
+
+/* ---------- homepage ---------- */
+const cards = TOOLS.map((t) => `<a class="card" href="tools/${t.slug}.html" data-search="${esc((t.name + ' ' + t.desc + ' ' + t.cat).toLowerCase())}"><span class="tag">${t.cat}</span><strong>${esc(t.name)}</strong><span>${esc(t.desc)}</span></a>`).join('\n');
+const soon = SOON.map((s) => `<div class="card soon"><span class="tag">Coming soon</span><strong>${esc(s.name)}</strong><span>${esc(s.desc)}</span></div>`).join('\n');
+const home = page({
+  title: 'BoxUser: free everyday tools in one place',
+  desc: 'Free calculators, text tools and more. Fast, simple, no ads.',
+  root: '',
+  body: `<main class="wrap">
+<section class="hero">${HERO_LOGO}
+<h1>Everything you need. In one box.</h1>
+<p>Free everyday tools that load fast and work on any phone or computer.</p>
+<label class="search"><span class="sr">Search tools</span><input id="q" type="search" placeholder="Search tools, e.g. EMI, age, password" autocomplete="off"></label>
+</section>
+<h2 id="tools">Tools</h2>
+<div class="grid">${cards}</div>
+<p id="none" class="empty">No tool found. Try another word.</p>
+<h2>On the way</h2>
+<div class="grid">${soon}</div>
+</main>`
+});
+fs.writeFileSync(path.join(DIST, 'index.html'), home);
+
+/* ---------- tool pages ---------- */
+function field(f) {
+  const id = esc(f.id);
+  if (f.type === 'checkbox') return `<label class="check"><input type="checkbox" id="${id}"${f.value ? ' checked' : ''}> ${esc(f.label)}</label>`;
+  let ctl;
+  if (f.type === 'select') ctl = `<select id="${id}">${f.options.map((o) => `<option value="${esc(o[0])}"${o[0] === f.value ? ' selected' : ''}>${esc(o[1])}</option>`).join('')}</select>`;
+  else if (f.type === 'textarea') ctl = `<textarea id="${id}" rows="${f.rows || 6}"></textarea>`;
+  else {
+    const at = ['step', 'min', 'max'].filter((k) => f[k] != null).map((k) => ` ${k}="${esc(f[k])}"`).join('');
+    ctl = `<input id="${id}" type="${f.type}"${at}${f.type === 'number' ? ' inputmode="decimal"' : ''}${f.value ? ` value="${esc(f.value)}"` : ''}>`;
+  }
+  return `<div class="field"><label for="${id}">${esc(f.label)}</label>${ctl}${f.hint ? `<div class="hint">${esc(f.hint)}</div>` : ''}</div>`;
+}
+TOOLS.forEach((t) => {
+  const others = TOOLS.filter((o) => o.slug !== t.slug).map((o) => `<a class="card" href="${o.slug}.html"><strong>${esc(o.name)}</strong></a>`).join('');
+  const html = page({
+    title: `${t.name} | BoxUser`, desc: t.desc, root: '../',
+    body: `<main class="wrap">
+<div class="crumb"><a href="../index.html">Home</a> / ${t.cat}</div>
+<h1 class="t">${esc(t.name)}</h1>
+<p class="lead">${esc(t.desc)}</p>
+<div class="tool">
+<form class="panel" id="tool-form" data-slug="${t.slug}" novalidate>${t.fields.map(field).join('')}</form>
+<section class="panel" aria-live="polite" aria-label="Result"><div id="out"><p class="msg">Loading...</p></div></section>
+</div>
+<h2>More tools</h2><div class="grid">${others}</div>
+</main>`
+  });
+  fs.writeFileSync(path.join(DIST, 'tools', t.slug + '.html'), html);
+});
+
+const size = (p) => fs.statSync(path.join(DIST, p)).size;
+console.log('built', TOOLS.length, 'tool pages + index');
+console.log('app.css', size('assets/app.css'), 'bytes | app.js', size('assets/app.js'), 'bytes');

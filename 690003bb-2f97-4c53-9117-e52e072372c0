@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Password generator | BoxUser</title>
+<meta name="description" content="Create strong random passwords using your browser’s secure random generator.">
+<meta name="theme-color" content="#4F46E5">
+<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../assets/app.css">
+</head><body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><symbol id="bx" viewBox="0 0 100 100"><polygon points="50,8 88,29 50,50 12,29" fill="var(--lg-t)"/><polygon points="12,29 50,50 50,92 12,71" fill="var(--lg-l)"/><polygon points="88,29 50,50 50,92 88,71" fill="var(--lg-r)"/><circle cx="50" cy="29" r="8" fill="var(--lg-d)"/></symbol></svg>
+<header class="top"><div class="wrap"><a class="brand" href="../index.html" aria-label="BoxUser home"><svg width="30" height="30" aria-hidden="true"><use href="#bx"/></svg><span>Box<b>User</b></span></a><nav><a href="../index.html#tools">All tools</a></nav></div></header>
+<main class="wrap">
+<div class="crumb"><a href="../index.html">Home</a> / SmartBox</div>
+<h1 class="t">Password generator</h1>
+<p class="lead">Create strong random passwords using your browser’s secure random generator.</p>
+<div class="tool">
+<form class="panel" id="tool-form" data-slug="password-generator" novalidate><div class="field"><label for="length">Length (8 to 64)</label><input id="length" type="number" step="1" min="8" max="64" inputmode="decimal" value="16"></div><label class="check"><input type="checkbox" id="lower" checked> Lowercase letters</label><label class="check"><input type="checkbox" id="upper" checked> Uppercase letters</label><label class="check"><input type="checkbox" id="digits" checked> Numbers</label><label class="check"><input type="checkbox" id="symbols" checked> Symbols</label></form>
+<section class="panel" aria-live="polite" aria-label="Result"><div id="out"><p class="msg">Loading...</p></div></section>
+</div>
+<h2>More tools</h2><div class="grid"><a class="card" href="age-calculator.html"><strong>Age calculator</strong></a><a class="card" href="percentage-calculator.html"><strong>Percentage calculator</strong></a><a class="card" href="emi-calculator.html"><strong>EMI calculator</strong></a><a class="card" href="discount-calculator.html"><strong>Discount calculator</strong></a><a class="card" href="word-counter.html"><strong>Word and character counter</strong></a><a class="card" href="case-converter.html"><strong>Case converter</strong></a></div>
+</main>
+<footer><div class="wrap">BoxUser. Free tools, no ads. These tools run in your browser and BoxUser's code does not send what you enter to any server.</div></footer>
+<script src="../assets/app.js" defer></script>
+</body></html>
